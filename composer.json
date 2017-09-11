@@ -1,0 +1,20 @@
+{
+    "name": "saslv/simple-media-server",
+    "description": "Simple Media Server for Raspberry Pi",
+    "type": "project",
+    "repositories": [
+        {
+            "url": "https://github.com/saslv/PHP-IMDB-Grabber.git",
+            "type": "git"
+        }
+    ],
+    "require": {
+        "saslv/php-imdb-grabber": "6.0.5.2"
+    },
+    "authors": [
+        {
+            "name": "saslv",
+            "email": "yar.hasko@gmail.com"
+        }
+    ]
+}
