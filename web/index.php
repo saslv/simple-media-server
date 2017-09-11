@@ -1,5 +1,6 @@
 <?php
 
+require('./../vendor/autoload.php');
 require('./../code/SimpleMediaServer.php');
 
 $server = new SimpleMediaServer([

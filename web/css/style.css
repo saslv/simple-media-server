@@ -1,0 +1,27 @@
+
+.films-list .image{
+    background-size: cover; width: 100%; height: 200px;
+    position: relative;
+}
+
+.films-list .caption{
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    max-height: 26px;
+    transition: all 0.3s ease-out;
+    padding: 3px 6px;
+    text-align: center;
+    overflow: hidden;
+    font-weight: 600;
+}
+
+.films-list .film:hover .caption{
+    max-height: 200px;
+    transition: all 0.3s ease-in;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 12px 6px;
+}

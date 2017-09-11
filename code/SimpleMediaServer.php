@@ -1,16 +1,22 @@
 <?php
 
-require('imdb.class.php');
+//require('imdb.class.php');
 
 class SimpleMediaServer{
     public $mediaDirectory = '/';
     public $videoExtensions = ['avi', 'mkv', 'mov', 'mp4'];
-    public $dataFileName = './../data/db.json';
+    public $dataFileName = 'data/db.json';
+
+    public $basePath = false;
 
     function __construct($params = [])
     {
         foreach($params as $key => $val){
             $this->$key = $val;
+        }
+
+        if(!$this->basePath){
+            $this->basePath = realpath(dirname(__FILE__) . '/..') . '/';
         }
     }
 
@@ -146,30 +152,20 @@ class SimpleMediaServer{
                     'fileExtension' => $path_parts['extension'],
                     'title' => $nameInfo['title'],
                     'year' => $nameInfo['year'],
+                    'cast' => [],
+                    'genre' => 'unknown',
                     'rating' => '?',
                     'poster_url' => false,
+                    'poster_url_big' => false,
+                    'plot' => '',
+                    'imdb_url' => '',
                 ];
 
-                $oIMDB = new IMDB($imdb_name, 60, 'movie');
-                if ($oIMDB->isReady) {
-                    self::success('Found at IMDB Movies (' . $imdb_name . ')');
-                    $movieInfo['title'] = $oIMDB->getTitle();
-                    $movieInfo['year'] = $oIMDB->getYear();
-                    $movieInfo['year'] = $oIMDB->getYear();
-                    $movieInfo['rating'] = $oIMDB->getRating();
-                    $movieInfo['poster_url'] = $oIMDB->getPoster();
-                }else{
-                    $oIMDB = new IMDB($imdb_name, 60, 'all');
-                    if ($oIMDB->isReady) {
-                        self::warning('Found at IMDB All (' . $imdb_name . ')');
-                        $movieInfo['title'] = $oIMDB->getTitle();
-                        $movieInfo['year'] = $oIMDB->getYear();
-                        $movieInfo['year'] = $oIMDB->getYear();
-                        $movieInfo['rating'] = $oIMDB->getRating();
-                        $movieInfo['poster_url'] = $oIMDB->getPoster();
-                    }else{
-                        self::error('Not found at IMDB (' . $imdb_name . ')');
-                    }
+                if(
+                    !$this->loadIMDBInfo($imdb_name, 'movie', $movieInfo) &&
+                    !$this->loadIMDBInfo($imdb_name, 'all', $movieInfo)
+                ){
+                    self::error('Not found at IMDB (' . $imdb_name . ')');
                 }
 
                 $data[] = $movieInfo;
@@ -178,75 +174,93 @@ class SimpleMediaServer{
 
         $data = $this->array_msort($data, ['title' => SORT_ASC]);
 
-        file_put_contents($this->dataFileName, json_encode($data));
+        file_put_contents($this->basePath . $this->dataFileName, json_encode($data));
+    }
+
+    private function loadIMDBInfo($imdb_name, $imdb_type, &$movieInfo){
+        $oIMDB = new IMDB($imdb_name, 60, $imdb_type, realpath($this->basePath));
+        $oIMDB->bArrayOutput = true;
+
+        if ($oIMDB->isReady) {
+            self::success('Found at IMDB ' . $imdb_type . ' (' . $imdb_name . ')');
+            $movieInfo['title'] = $oIMDB->getTitle();
+            $movieInfo['year'] = $oIMDB->getYear();
+            $movieInfo['rating'] = $oIMDB->getRating();
+            $movieInfo['poster_url'] = $oIMDB->getPoster();
+            $movieInfo['poster_url_big'] = $oIMDB->getPoster('big');
+            $movieInfo['genre'] = $oIMDB->getGenre();
+            $movieInfo['cast'] = $oIMDB->getCast();
+            $movieInfo['plot'] = $oIMDB->getPlot();
+            $movieInfo['imdb_url'] = $oIMDB->getUrl();
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    public function loadData($id = false){
+        $data = json_decode(file_get_contents($this->basePath . $this->dataFileName), true);
+
+        if(is_int($id)){
+            if(array_key_exists($id, $data) && isset($data[$id])){
+                return $data[$id];
+            }else{
+                return false;
+            }
+        }
+
+        return $data;
     }
 
     public function actionList(){
-        $data = json_decode(file_get_contents($this->dataFileName), true);
+        $data = $this->loadData();
 
-        $html =
-            '<table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th colspan="6">
-                            SimpleMediaServer
-                            <span class="pull-right">Total Movies in DB: ' . count($data) .'</span>
-                        </th>
-                    </tr>
-                    <tr>
-                        <th>Poster</th>
-                        <th>Title</th>
-                        <th>Year</th>
-                        <th>IMDB Rating</th>
-                        <th>Extension</th>
-                        <th>Open</th>
-                    </tr>
-                </thead>';
+        $this->render('list', [
+            'data' => $data,
+        ]);
+    }
 
-        $index = 0;
-        foreach ($data as $movieInfo){
-            $html .=
-                '<tr>
-                    <td>
-                        <img src="' . $movieInfo['poster_url'] . '" class="img-responsive">
-                    </td>
-                    <td>' . $movieInfo['title'] . '</td>
-                    <td>' . $movieInfo['year'] . '</td>
-                    <td>' . $movieInfo['rating'] . '</td>
-                    <td>' . $movieInfo['fileExtension'] . '</td>
-                    <td><a href="?view=' . $index . '">[open]</a></td>
-                </tr>
-            ';
-            $index++;
+    public function actionView(){
+        $id = (int)$_GET['id'];
+
+        $item = $this->loadData($id);
+
+        if(!$item){
+            return $this->actionError('Not found!');
         }
 
-        $html .= '</table>';
-
-        return $this->render($html);
+        $this->render('view', [
+            'item' => $item,
+            'id' => $id
+        ]);
     }
 
-    public function actionView($index){
-        $html = '
-            <object classid="clsid:9BE31822-FDAD-461B-AD51-BE1D1C159921" codebase="http://download.videolan.org/pub/videolan/vlc/last/win32/axvlc.cab" id="vlc">
-                <embed type="application/x-vlc-plugin" pluginspage="http://www.videolan.org" name="vlc" width="800px" height="600px" target="http://youtube.com" />
-            </object>
-        ';
+    public function actionPlay(){
+        $id = (int)$_GET['id'];
 
-        return $this->render($html);
+        $item = $this->loadData($id);
+
+        if(!$item){
+            return $this->actionError('Not found!');
+        }
+
+        $this->render('play', [
+            'item' => $item,
+            'id' => $id
+        ]);
     }
 
-    private function render($html_content){
-        echo
-        '<html>
-            <head>
-                <title>SimpleMediaServer</title>
-                <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
-                <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
-            </head>
-            <body>' .
-            $html_content .
-            '</body>
-        </html>';
+    private function render($view_file, $params = []){
+        extract($params);
+
+        ob_start();
+        include $this->basePath . 'views/' . $view_file . '.php';
+
+        $content = ob_get_clean();
+
+        ob_end_clean();
+
+        include $this->basePath . 'views/layout.php';
 
         return;
     }
@@ -263,9 +277,10 @@ class SimpleMediaServer{
         echo '<div style="background-color: yellow;">' . $message . '</div>';
     }
 
-    public function actionError(){
-        echo 'Error occurred!';
-        die();
+    public function actionError($message = 'General Error'){
+        $this->render('error', [
+            'message' => $message
+        ]);
     }
 
     public function autoRoute(){
